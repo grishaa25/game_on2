@@ -16,6 +16,7 @@ type AuthContextValue = {
     name: string;
     email: string;
     password: string;
+    profileExtras?: Record<string, any>;
   }) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -72,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     name,
     email,
     password,
+    profileExtras,
   }) => {
     setLoading(true);
     const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
@@ -86,6 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role,
       hasVenue: role === 'HOST' ? false : undefined,
       createdAt: serverTimestamp(),
+      ...(profileExtras ?? {}),
     });
 
     if (role === 'HOST') {
