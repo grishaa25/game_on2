@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { SignupUserScreen } from '../screens/auth/SignupUserScreen';
 import { SignupHostScreen } from '../screens/auth/SignupHostScreen';
+import { HostOnboardingNavigator } from './HostOnboardingNavigator';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -50,7 +51,7 @@ const HostTabs = () => (
 );
 
 export const RootNavigator = () => {
-  const { firebaseUser, role, loading } = useAuth();
+  const { firebaseUser, role, hasVenue, loading } = useAuth();
 
   if (loading) {
     return (
@@ -66,6 +67,8 @@ export const RootNavigator = () => {
     <NavigationContainer>
       {!firebaseUser || !role ? (
         <AuthStack />
+      ) : role === 'HOST' && !hasVenue ? (
+        <HostOnboardingNavigator />
       ) : role === 'USER' ? (
         <UserTabs />
       ) : (

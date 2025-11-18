@@ -8,6 +8,8 @@ type Role = 'USER' | 'HOST' | null;
 type AuthContextValue = {
   firebaseUser: User | null;
   role: Role;
+  /** for HOST users: whether they have created at least one venue */
+  hasVenue: boolean;
   loading: boolean;
   signupWithRole: (params: {
     role: 'USER' | 'HOST';
@@ -17,6 +19,8 @@ type AuthContextValue = {
   }) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** called after host finishes onboarding to mark venue created */
+  markVenueCreated: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -24,6 +28,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role>(null);
+  const [hasVenue, setHasVenue] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,6 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setFirebaseUser(user);
       if (!user) {
         setRole(null);
+        setHasVenue(false);
         setLoading(false);
         return;
       }
@@ -38,17 +44,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const ref = doc(db, 'users', user.uid);
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        const data = snap.data() as { role?: Role };
-        setRole((data.role as Role) || 'USER');
+        const data = snap.data() as { role?: Role; hasVenue?: boolean };
+        const effectiveRole = (data.role as Role) || 'USER';
+        setRole(effectiveRole);
+        setHasVenue(Boolean(data.hasVenue));
       } else {
-        setRole('USER');
-        await setDoc(ref, {
+        const fallback = {
           uid: user.uid,
           email: user.email,
           name: user.displayName ?? '',
-          role: 'USER',
+          role: 'USER' as Role,
+          hasVenue: false,
           createdAt: serverTimestamp(),
-        });
+        };
+        setRole(fallback.role);
+        setHasVenue(false);
+        await setDoc(ref, fallback);
       }
       setLoading(false);
     });
@@ -73,8 +84,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       name,
       role,
+      hasVenue: role === 'HOST' ? false : undefined,
       createdAt: serverTimestamp(),
     });
+
+    if (role === 'HOST') {
+      setHasVenue(false);
+    }
 
     setLoading(false);
   };
@@ -90,8 +106,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await auth.signOut();
   };
 
+  const markVenueCreated = async () => {
+    if (!auth.currentUser) return;
+    const ref = doc(db, 'users', auth.currentUser.uid);
+    await setDoc(ref, { hasVenue: true }, { merge: true });
+    setHasVenue(true);
+  };
+
   return (
-    <AuthContext.Provider value={{ firebaseUser, role, loading, signupWithRole, login, logout }}>
+    <AuthContext.Provider
+      value={{ firebaseUser, role, hasVenue, loading, signupWithRole, login, logout, markVenueCreated }}
+    >
       {children}
     </AuthContext.Provider>
   );
